@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 class VoiceAssistant:
     """
     A voice assistant class that manages conversations with ElevenLabs AI agent.
-    Supports conversation history, volume control, and configurable timeouts.
+    Supports conversation history and configurable timeouts.
     """
     
     def __init__(self):
@@ -41,9 +41,10 @@ class VoiceAssistant:
         
         if not self.agent_id:
             raise ValueError("AGENT_ID environment variable is required")
+        if not self.api_key:
+            logger.warning("ELEVENLABS_API_KEY not set, assuming the agent is public")
         
         # Optional configuration
-        self.volume = float(os.getenv("VOLUME", "1.0"))
         self.timeout = int(os.getenv("TIMEOUT", "300"))  # 5 minutes default
         
         # Initialize state
@@ -108,41 +109,13 @@ class VoiceAssistant:
         logger.info("\nReceived interrupt signal. Ending conversation...")
         if self.conversation:
             self.conversation.end_session()
-            
-    def setup_client_tools(self) -> ClientTools:
-        """
-        Set up client-side tools that the AI agent can use.
-        
-        Returns:
-            ClientTools: Configured client tools instance
-        """
-        def log_message(parameters: dict) -> None:
-            """
-            Client tool to log messages from the AI agent.
-            
-            Args:
-                parameters: Dictionary containing the message parameter
-            """
-            message = parameters.get("message")
-            if message:
-                logger.info(f"AI Tool Call - Log Message: {message}")
-        
-        client_tools = ClientTools()
-        client_tools.register("logMessage", log_message)
-        return client_tools
 
     def start(self) -> None:
         """Start the voice assistant conversation."""
         try:
-            # Set up signal handler for graceful shutdown
-            signal.signal(signal.SIGINT, self.handle_interrupt)
-            
             self.start_time = datetime.now()
             
-            # Initialize client tools
-            client_tools = self.setup_client_tools()
-            
-            # Initialize the conversation
+            # Initialize the conversation using the simpler official example approach
             self.conversation = Conversation(
                 client=self.client,
                 agent_id=self.agent_id,
@@ -151,15 +124,15 @@ class VoiceAssistant:
                 callback_agent_response=self.agent_response_callback,
                 callback_user_transcript=self.user_transcript_callback,
                 callback_agent_response_correction=self.correction_callback,
-                callback_latency_measurement=self.latency_callback,
-                volume=self.volume,
-                client_tools=client_tools
+                callback_latency_measurement=self.latency_callback
             )
             
             logger.info("Starting conversation. Press Ctrl+C to end.")
-            self.conversation.start_session()
             
-            # Wait for the conversation to end
+            # Set up signal handler for graceful shutdown
+            signal.signal(signal.SIGINT, self.handle_interrupt)
+            
+            self.conversation.start_session()
             conversation_id = self.conversation.wait_for_session_end()
             logger.info(f"Conversation ended. ID: {conversation_id}")
             
